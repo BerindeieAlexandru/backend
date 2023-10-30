@@ -2,7 +2,7 @@
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
     <data-source source="LOCAL" name="database" uuid="617eb69d-2a6a-4cf7-a4dd-34b6f3eb51c8">
-      <driver-ref>sqlite.xerial</driver-ref>
+      <driver-ref>21ecfe72-a100-4dc6-8d6b-b80a5cd8072d</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:C:\Users\Alexandru\Documents\GitHub\hackaton\backend\data\database.db</jdbc-url>
