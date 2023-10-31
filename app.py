@@ -8,10 +8,10 @@ import requests
 from datetime import datetime, timezone
 
 app = Flask(__name__)
-# allow routes for cross-origin requests
+
 CORS(app, resources={
-    r"/create-reservation": {"origins": "http://localhost:3000"},
-    r"/get-reservation-data": {"origins": "http://localhost:3000"},
+    r"/add-scooter": {"origins": "http://localhost:3000"},
+    r"/available-scooters": {"origins": "http://localhost:3000"},
     r"/update-scooter": {"origins": "http://localhost:3000"}
 })
 
@@ -24,7 +24,7 @@ def get_db_connection():
 
 
 # create a new reservation
-@app.route("/create-reservation", methods=["POST"])
+@app.route("/add-scooter", methods=["POST"])
 def create_reservation():
     data = request.get_json()
     first_name = data.get("firstName")
@@ -33,6 +33,7 @@ def create_reservation():
     start_time = data.get("startTime")
     end_time = data.get("endTime")
     location = data.get("location")
+    price = data.get("price")
 
     start_time = datetime.strptime(start_time, "%Y-%m-%dT%H:%M")
 
@@ -47,9 +48,9 @@ def create_reservation():
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO reservations (first_name, last_name, phone_number, start_time, end_time, location, available) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (first_name, last_name, phone_number, start_time, end_time, location, available)
+        "INSERT INTO scooters (first_name, last_name, phone_number, start_time, end_time, location, price_per_hour, available) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (first_name, last_name, phone_number, start_time, end_time, location, price, available)
     )
 
     conn.commit()
@@ -59,7 +60,7 @@ def create_reservation():
 
 
 # send available scooters data for front
-@app.route("/get-reservation-data", methods=["GET"])
+@app.route("/available-scooters", methods=["GET"])
 def get_reservation_data():
     conn = sqlite3.connect('data/database.db')
     cursor = conn.cursor()
@@ -68,8 +69,8 @@ def get_reservation_data():
 
     # Fetch reservation data from the database with a filter
     cursor.execute(
-        "SELECT first_name, last_name, phone_number, location "
-        "FROM reservations "
+        "SELECT first_name, last_name, phone_number, location, price_per_hour "
+        "FROM scooters "
         "WHERE end_time <= ? AND available = 'yes'", (current_time,)
     )
     reservation_data = cursor.fetchall()
@@ -82,6 +83,7 @@ def get_reservation_data():
             "last_name": row[1],
             "phone_number": row[2],
             "location": row[3],
+            "price_per_hour": row[4]
         }
         for row in reservation_data
     ]
@@ -100,7 +102,7 @@ def update_scooter_availability():
     cursor = conn.cursor()
 
     cursor.execute(
-        "UPDATE reservations SET available = ? WHERE first_name = ? AND last_name = ?",
+        "UPDATE scooters SET available = ? WHERE first_name = ? AND last_name = ?",
         ("no", first_name, last_name)
     )
 
