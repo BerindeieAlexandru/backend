@@ -1,18 +1,16 @@
 import sqlite3
 
-import app
-from flask import Flask, request, render_template, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
 from datetime import datetime, timezone
 
 app = Flask(__name__)
 
 CORS(app, resources={
     r"/add-scooter": {"origins": "http://localhost:3000"},
+    r"/add-reservation": {"origins": "http://localhost:3000"},
     r"/available-scooters": {"origins": "http://localhost:3000"},
-    r"/update-scooter": {"origins": "http://localhost:3000"}
+    r"/update-scooter": {"origins": "http://localhost:3000"},
 })
 
 
@@ -51,6 +49,36 @@ def create_reservation():
         "INSERT INTO scooters (first_name, last_name, phone_number, start_time, end_time, location, price_per_hour, available) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (first_name, last_name, phone_number, start_time, end_time, location, price, available)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Reservation created"}), 201
+
+
+# create a new reservation
+@app.route("/add-reservation", methods=["POST"])
+def add_reservation():
+    data = request.get_json()
+    owner_first_name = data.get("owner_first_name")
+    owner_last_name = data.get("owner_last_name")
+    client_first_name = data.get("firstName")
+    client_last_name = data.get("lastName")
+    phone_number = data.get("phoneNumber")
+    start_time = data.get("startTime")
+    end_time = data.get("endTime")
+    location = data.get("location")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT INTO reservations (owner_first_name, owner_last_name, client_first_name, client_last_name, "
+        "phone_number, location, start_date, stop_date)"
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (owner_first_name, owner_last_name, client_first_name, client_last_name, phone_number, location, start_time,
+         end_time)
     )
 
     conn.commit()
