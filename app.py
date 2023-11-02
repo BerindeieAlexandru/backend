@@ -2,7 +2,7 @@ import sqlite3
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
@@ -33,11 +33,12 @@ def create_reservation():
     location = data.get("location")
     price = data.get("price")
 
-    start_time = datetime.strptime(start_time, "%Y-%m-%dT%H:%M")
+    start_time1 = datetime.strptime(start_time, "%Y-%m-%dT%H:%M")
+    end_time1 = datetime.strptime(end_time, "%Y-%m-%dT%H:%M")
 
     # Check if start_time is after the current time
     current_time = datetime.now()
-    if start_time > current_time:
+    if start_time1 > current_time:
         available = "yes"
     else:
         available = "no"
@@ -48,7 +49,7 @@ def create_reservation():
     cursor.execute(
         "INSERT INTO scooters (first_name, last_name, phone_number, start_time, end_time, location, price_per_hour, available) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (first_name, last_name, phone_number, start_time, end_time, location, price, available)
+        (first_name, last_name, phone_number, start_time1, end_time1, location, price, available)
     )
 
     conn.commit()
@@ -69,6 +70,9 @@ def add_reservation():
     start_time = data.get("startTime")
     end_time = data.get("endTime")
     location = data.get("location")
+
+    start_time = datetime.strptime(start_time,"%Y-%m-%dT%H:%M")
+    end_time = datetime.strptime(end_time,"%Y-%m-%dT%H:%M")
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -93,13 +97,27 @@ def get_reservation_data():
     conn = sqlite3.connect('data/database.db')
     cursor = conn.cursor()
 
-    current_time = datetime.now(timezone.utc).strftime("YYYY-MM-DDTHH:MM:SSZ")
+    current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    twenty_minutes_later = (datetime.now(timezone.utc) + timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M")
 
-    # Fetch reservation data from the database with a filter
+    # Fetch available scooters data from the database with the specified criteria
     cursor.execute(
         "SELECT first_name, last_name, phone_number, location, price_per_hour "
         "FROM scooters "
-        "WHERE end_time <= ? AND available = 'yes'", (current_time,)
+        "WHERE start_time > ? AND end_time > ? AND start_time < end_time AND available = 'yes' "
+        "AND NOT EXISTS ("
+        "   SELECT 1 FROM reservations "
+        "   WHERE scooters.first_name = reservations.owner_first_name "
+        "   AND scooters.last_name = reservations.owner_last_name "
+        "   AND start_date <= ? AND stop_date >= ?"
+        ") "
+        "AND NOT EXISTS ("
+        "   SELECT 1 FROM scooter_busy_times "
+        "   WHERE scooters.first_name = scooter_busy_times.first_name "
+        "   AND scooters.last_name = scooter_busy_times.last_name "
+        "   AND start_time < ? AND end_time > ?"
+        ")",
+        (current_time, current_time, twenty_minutes_later, twenty_minutes_later, twenty_minutes_later, twenty_minutes_later)
     )
     reservation_data = cursor.fetchall()
 
@@ -115,7 +133,6 @@ def get_reservation_data():
         }
         for row in reservation_data
     ]
-    print(reservation_list)
     return jsonify(reservation_list)
 
 
@@ -125,13 +142,19 @@ def update_scooter_availability():
     data = request.get_json()
     first_name = data.get("first_name")
     last_name = data.get("last_name")
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
+
+    start_time = datetime.strptime(start_time, "%Y-%m-%dT%H:%M")
+    end_time = datetime.strptime(end_time, "%Y-%m-%dT%H:%M")
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "UPDATE scooters SET available = ? WHERE first_name = ? AND last_name = ?",
-        ("no", first_name, last_name)
+        "INSERT INTO scooter_busy_times (first_name, last_name, start_time, end_time)"
+        "VALUES (?, ?, ?, ?)",
+        (first_name, last_name, start_time, end_time)
     )
 
     conn.commit()
