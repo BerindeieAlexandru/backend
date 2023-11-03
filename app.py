@@ -84,20 +84,21 @@ def add_reservation():
         "WHERE EXISTS ("
         "   SELECT 1 "
         "   FROM scooters s "
-        "   LEFT JOIN scooter_busy_times sbt "
-        "   ON s.first_name = sbt.owner_fn "
-        "   AND s.last_name = sbt.owner_ln "
+        "   LEFT JOIN scooter_busy_times sbt ON s.first_name = sbt.owner_fn AND s.last_name = sbt.owner_ln "
+        "   LEFT JOIN reservations r ON s.first_name = r.owner_first_name AND s.last_name = r.owner_last_name "
         "   WHERE s.first_name = ? AND s.last_name = ? "
         "   AND s.start_time <= ? AND s.end_time >= ? "
         "   AND ? > ? "
         "   AND ( ( ? < sbt.start_time AND ? < sbt.start_time) "
-        "   OR ( ? > sbt.end_time AND ? > sbt.end_time) )"
+        "   OR ( ? > sbt.end_time AND ? > sbt.end_time) OR sbt.start_time IS NULL )"
+        "   AND ( ( ? < r.start_date AND ? < r.start_date) "
+        "   OR ( ? > r.stop_date AND ? > r.stop_date) OR r.start_date IS NULL )"
         ")",
         (
             owner_first_name, owner_last_name, client_first_name, client_last_name,
             phone_number, location, start_time, end_time,
             owner_first_name, owner_last_name, start_time, end_time, end_time, start_time, start_time, end_time,
-            start_time, end_time)
+            start_time, end_time, start_time, end_time, start_time, end_time)
     )
 
     conn.commit()
@@ -112,28 +113,17 @@ def get_reservation_data():
     conn = sqlite3.connect('data/database.db')
     cursor = conn.cursor()
 
-    current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-    twenty_minutes_later = (datetime.now(timezone.utc) + timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M")
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # Fetch available scooters data from the database with the specified criteria
     cursor.execute(
         "SELECT first_name, last_name, phone_number, location, price_per_hour "
         "FROM scooters "
-        "WHERE start_time > ? AND end_time > ? AND start_time < end_time AND available = 'yes' "
-        "AND NOT EXISTS ("
-        "   SELECT 1 FROM reservations "
-        "   WHERE scooters.first_name = reservations.owner_first_name "
-        "   AND scooters.last_name = reservations.owner_last_name "
-        "   AND start_date <= ? AND stop_date >= ?"
-        ") "
-        "AND NOT EXISTS ("
-        "   SELECT 1 FROM scooter_busy_times "
-        "   WHERE scooters.first_name = scooter_busy_times.owner_fn "
-        "   AND scooters.last_name = scooter_busy_times.owner_ln "
-        "   AND start_time < ? AND end_time > ?"
-        ")",
-        (current_time, current_time, current_time, current_time, current_time, current_time)
+        "WHERE start_time >= ? AND end_time >= ? ",
+        (
+            current_time, current_time
+        )
     )
+
     reservation_data = cursor.fetchall()
 
     conn.close()
@@ -148,7 +138,7 @@ def get_reservation_data():
         }
         for row in reservation_data
     ]
-    print(reservation_list)
+    print(reservation_data)
     return jsonify(reservation_list)
 
 
@@ -169,11 +159,25 @@ def update_scooter_availability():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "INSERT INTO scooter_busy_times (first_name, last_name, start_time, end_time, owner_fn, owner_ln)"
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (first_name, last_name, start_time, end_time, ofirst_name, olast_name)
-    )
+    cursor.execute( "INSERT INTO scooter_busy_times (first_name, last_name, start_time, end_time, owner_fn, owner_ln)"
+                    "SELECT ?, ?, ?, ?, ?, ? "
+                    "WHERE EXISTS ("
+                    "   SELECT 1 "
+                    "   FROM scooters s "
+                    "   LEFT JOIN reservations r ON s.first_name = r.owner_first_name AND s.last_name = r.owner_last_name"
+                    "   LEFT JOIN scooter_busy_times sbt ON s.first_name = sbt.owner_fn AND s.last_name = sbt.owner_ln "
+                    "   WHERE s.first_name = ? AND s.last_name = ? "
+                    "   AND s.start_time <= ? AND s.end_time >= ? "
+                    "   AND ? > ? "
+                    "   AND ( ( ? < r.start_date AND ? < r.start_date) "
+                    "   OR ( ? > r.stop_date AND ? > r.stop_date) OR r.start_date IS NULL )"
+                    "   AND ( ( ? < sbt.start_time AND ? < sbt.start_time) "
+                    "   OR ( ? > sbt.end_time AND ? > sbt.end_time) OR sbt.start_time IS NULL OR sbt.end_time IS NULL)"
+                    ")",
+                    (first_name, last_name, start_time, end_time, ofirst_name, olast_name, first_name, last_name,
+                     start_time, end_time, end_time, start_time, start_time, end_time, start_time, end_time, start_time,
+                     end_time, start_time, end_time)
+                    )
 
     conn.commit()
     conn.close()
