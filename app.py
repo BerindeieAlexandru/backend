@@ -79,10 +79,25 @@ def add_reservation():
 
     cursor.execute(
         "INSERT INTO reservations (owner_first_name, owner_last_name, client_first_name, client_last_name, "
-        "phone_number, location, start_date, stop_date)"
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (owner_first_name, owner_last_name, client_first_name, client_last_name, phone_number, location, start_time,
-         end_time)
+        "phone_number, location, start_date, stop_date) "
+        "SELECT ?, ?, ?, ?, ?, ?, ?, ? "
+        "WHERE EXISTS ("
+        "   SELECT 1 "
+        "   FROM scooters s "
+        "   LEFT JOIN scooter_busy_times sbt "
+        "   ON s.first_name = sbt.owner_fn "
+        "   AND s.last_name = sbt.owner_ln "
+        "   WHERE s.first_name = ? AND s.last_name = ? "
+        "   AND s.start_time <= ? AND s.end_time >= ? "
+        "   AND ? > ? "
+        "   AND ( ( ? < sbt.start_time AND ? < sbt.start_time) "
+        "   OR ( ? > sbt.end_time AND ? > sbt.end_time) )"
+        ")",
+        (
+            owner_first_name, owner_last_name, client_first_name, client_last_name,
+            phone_number, location, start_time, end_time,
+            owner_first_name, owner_last_name, start_time, end_time, end_time, start_time, start_time, end_time,
+            start_time, end_time)
     )
 
     conn.commit()
@@ -113,11 +128,11 @@ def get_reservation_data():
         ") "
         "AND NOT EXISTS ("
         "   SELECT 1 FROM scooter_busy_times "
-        "   WHERE scooters.first_name = scooter_busy_times.first_name "
-        "   AND scooters.last_name = scooter_busy_times.last_name "
+        "   WHERE scooters.first_name = scooter_busy_times.owner_fn "
+        "   AND scooters.last_name = scooter_busy_times.owner_ln "
         "   AND start_time < ? AND end_time > ?"
         ")",
-        (current_time, current_time, twenty_minutes_later, twenty_minutes_later, twenty_minutes_later, twenty_minutes_later)
+        (current_time, current_time, current_time, current_time, current_time, current_time)
     )
     reservation_data = cursor.fetchall()
 
@@ -133,6 +148,7 @@ def get_reservation_data():
         }
         for row in reservation_data
     ]
+    print(reservation_list)
     return jsonify(reservation_list)
 
 
@@ -140,6 +156,8 @@ def get_reservation_data():
 @app.route("/update-scooter", methods=["POST"])
 def update_scooter_availability():
     data = request.get_json()
+    ofirst_name = data.get("owner_first_name")
+    olast_name = data.get("owner_last_name")
     first_name = data.get("first_name")
     last_name = data.get("last_name")
     start_time = data.get("start_time")
@@ -152,9 +170,9 @@ def update_scooter_availability():
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO scooter_busy_times (first_name, last_name, start_time, end_time)"
-        "VALUES (?, ?, ?, ?)",
-        (first_name, last_name, start_time, end_time)
+        "INSERT INTO scooter_busy_times (first_name, last_name, start_time, end_time, owner_fn, owner_ln)"
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (first_name, last_name, start_time, end_time, ofirst_name, olast_name)
     )
 
     conn.commit()
