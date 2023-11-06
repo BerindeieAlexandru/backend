@@ -3,7 +3,7 @@ import sqlite3
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timezone, timedelta
-
+from flask_ngrok import run_with_ngrok
 app = Flask(__name__)
 
 CORS(app, resources={
@@ -13,14 +13,16 @@ CORS(app, resources={
     r"/update-scooter": {"origins": "http://localhost:3000"},
 })
 
-
+run_with_ngrok(app)  # Start ngrok when app is run
 # connect db
 def get_db_connection():
     conn = sqlite3.connect('data/database.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-
+@app.route("/", methods=["GET"])
+def empty():
+    return jsonify({"message": "Hello World!"}), 200
 # create a new reservation
 @app.route("/add-scooter", methods=["POST"])
 def create_reservation():
